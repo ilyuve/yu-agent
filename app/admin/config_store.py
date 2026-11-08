@@ -230,3 +230,78 @@ def update_channels(app_yaml_path: Path, *, adapters: list[str],
             dd[f] = dingdoc[f]
     data["dingdoc"] = dd
     dump_yaml(app_yaml_path, data)
+
+
+# ── 服务与代码托管（app.yaml 的 server.* / codehost.api_base）──
+
+_SERVER_INT_LIMITS = {"workers": (1, 16), "max_steps": (1, 200),
+                      "dedup_ttl_sec": (10, 86400)}
+
+
+def update_server(app_yaml_path: Path, *, api_base: str | None = None,
+                  workers: int | None = None, max_steps: int | None = None,
+                  dedup_ttl_sec: int | None = None) -> None:
+    """服务参数与 GitLab 地址写回（就地修改，注释保留）。不合法抛 ValueError。"""
+    if api_base is not None and not re.match(r"^https?://[^\s]+", api_base):
+        raise ValueError("api_base 必须是 http(s) URL")
+    for name, v in (("workers", workers), ("max_steps", max_steps),
+                    ("dedup_ttl_sec", dedup_ttl_sec)):
+        if v is None:
+            continue
+        lo, hi = _SERVER_INT_LIMITS[name]
+        if not isinstance(v, int) or not (lo <= v <= hi):
+            raise ValueError(f"{name} 必须是 {lo}~{hi} 的整数")
+    data = load_yaml(app_yaml_path)
+    server = data.get("server")
+    if not isinstance(server, CommentedMap):
+        server = CommentedMap()
+        data["server"] = server
+    for name, v in (("workers", workers), ("max_steps", max_steps),
+                    ("dedup_ttl_sec", dedup_ttl_sec)):
+        if v is not None:
+            server[name] = v
+    if api_base is not None:
+        ch = data.get("codehost")
+        if not isinstance(ch, CommentedMap):
+            ch = CommentedMap()
+            data["codehost"] = ch
+        ch["api_base"] = api_base
+    dump_yaml(app_yaml_path, data)
+
+
+# ── 密钥（.env 定点改写 + 星号脱敏展示）──
+
+# 允许在界面维护的密钥白名单——不在列的一律拒绝，防止接口被用来写任意环境变量
+SECRET_ENV_KEYS = ("DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET",
+                   "GITLAB_TOKEN", "LLM_POOL_KEY", "ADMIN_TOKEN")
+
+_ENV_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=")
+
+
+def mask_secret(value: str) -> str:
+    """密钥展示形态：sk-****01b8；过短则全掩。"""
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "****"
+    return f"{value[:3]}****{value[-4:]}"
+
+
+def write_env(env_path: Path, updates: dict[str, str]) -> None:
+    """定点改写 .env 的 KEY=VALUE 行：注释与其他行原样保留，新键追加末尾。"""
+    bad = [k for k in updates if k not in SECRET_ENV_KEYS]
+    if bad:
+        raise ValueError(f"不允许在界面维护的环境变量: {bad}（已有: {list(SECRET_ENV_KEYS)}）")
+    lines = (env_path.read_text(encoding="utf-8").splitlines()
+             if env_path.exists() else [])
+    remaining = dict(updates)
+    out = []
+    for line in lines:
+        m = _ENV_LINE.match(line)
+        if m and m.group(1) in remaining:
+            out.append(f"{m.group(1)}={remaining.pop(m.group(1))}")
+        else:
+            out.append(line)
+    for k, v in remaining.items():
+        out.append(f"{k}={v}")
+    env_path.write_text("\n".join(out) + "\n", encoding="utf-8")

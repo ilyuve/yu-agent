@@ -181,3 +181,57 @@ def test_update_channels_rejects_dingdoc_without_fields(tmp_path):
     with pytest.raises(ValueError, match="未支持的通道"):
         update_channels(p, adapters=["wechat"], dingtalk={},
                         report_sink="local", dingdoc={})
+
+
+# ── 服务与代码托管（update_server）──
+
+def test_update_server_writes_values(app_file):
+    from app.admin.config_store import update_server
+    update_server(app_file, api_base="https://gitlab.internal/api/v4",
+                  workers=5, max_steps=60, dedup_ttl_sec=600)
+    data = load_yaml(app_file)
+    assert data["codehost"]["api_base"] == "https://gitlab.internal/api/v4"
+    assert data["server"]["workers"] == 5
+    assert data["server"]["max_steps"] == 60
+    assert data["server"]["dedup_ttl_sec"] == 600
+    # 注释保留（往返模式）
+    assert "# 服务级配置" in app_file.read_text(encoding="utf-8")
+
+
+def test_update_server_validation(app_file):
+    from app.admin.config_store import update_server
+    with pytest.raises(ValueError, match="api_base"):
+        update_server(app_file, api_base="ftp://x")
+    with pytest.raises(ValueError, match="workers"):
+        update_server(app_file, workers=0)
+    with pytest.raises(ValueError, match="dedup_ttl_sec"):
+        update_server(app_file, dedup_ttl_sec=5)
+
+
+# ── 密钥写回与掩码（write_env / mask_secret）──
+
+def test_mask_secret():
+    from app.admin.config_store import mask_secret
+    assert mask_secret("sk-8d40d9874583b8") == "sk-****83b8"
+    assert mask_secret("short") == "****"
+    assert mask_secret("") == ""
+
+
+def test_write_env_preserves_comments(tmp_path):
+    from app.admin.config_store import write_env
+    env = tmp_path / ".env"
+    env.write_text("# 头部注释\nDINGTALK_CLIENT_ID=old\n\n# 模型池\nLLM_POOL_KEY=old-key\n",
+                   encoding="utf-8")
+    write_env(env, {"LLM_POOL_KEY": "new-key", "GITLAB_TOKEN": "glpat-x"})
+    text = env.read_text(encoding="utf-8")
+    assert "# 头部注释" in text and "# 模型池" in text
+    assert "DINGTALK_CLIENT_ID=old" in text          # 未动的键原样
+    assert "LLM_POOL_KEY=new-key" in text
+    assert "GITLAB_TOKEN=glpat-x" in text            # 新键追加
+    assert "old-key" not in text
+
+
+def test_write_env_rejects_unknown_keys(tmp_path):
+    from app.admin.config_store import write_env
+    with pytest.raises(ValueError, match="不允许"):
+        write_env(tmp_path / ".env", {"PATH": "/tmp/evil"})

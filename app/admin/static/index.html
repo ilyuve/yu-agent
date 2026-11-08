@@ -546,7 +546,42 @@ select:focus, .form-row input:focus, .tbl-input:focus { border-color: var(--gree
         <div class="form-row"><label>文档操作人 unionId</label>
           <input id="ch_op" placeholder="归档选 dingdoc 时必填"></div>
       </div>
-      <p class="hint">这里只存环境变量名，真实凭据在服务器的 <span class="mono">.env</span>。通道改动重启审查服务后生效。</p>
+      <p class="hint">这里只存环境变量名，真实凭据在下方「密钥」卡片维护（写入服务器 .env）。钉钉凭据变更需重启审查服务（stream 长连接），其余热生效。</p>
+    </div>
+
+    <div class="card">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>服务与代码托管
+        <button class="btn btn-sm card-action" onclick="saveServer()">保存</button></h3>
+      <div class="form-grid">
+        <div class="form-row"><label>GitLab API 地址（api_base）</label>
+          <input id="sv_api_base" placeholder="https://gitlab.example.com/api/v4"></div>
+        <div class="form-row"><label>并发审查数（workers，1~16）</label>
+          <input id="sv_workers" type="number" min="1" max="16"></div>
+        <div class="form-row"><label>Agent 步数上限（max_steps，1~200）</label>
+          <input id="sv_max_steps" type="number" min="1" max="200"></div>
+        <div class="form-row"><label>去重窗口（dedup_ttl_sec，10~86400 秒）</label>
+          <input id="sv_dedup" type="number" min="10" max="86400"></div>
+      </div>
+      <p class="hint">api_base / max_steps / dedup_ttl 保存后新任务热生效；<b>workers 需重启审查服务</b>（worker 池是进程级资源）。</p>
+    </div>
+
+    <div class="card">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>密钥（.env）
+        <button class="btn btn-sm card-action" onclick="saveSecrets()">保存</button></h3>
+      <div class="form-grid">
+        <div class="form-row"><label>钉钉 DINGTALK_CLIENT_ID</label>
+          <input id="sk_DINGTALK_CLIENT_ID" type="password" autocomplete="off"></div>
+        <div class="form-row"><label>钉钉 DINGTALK_CLIENT_SECRET</label>
+          <input id="sk_DINGTALK_CLIENT_SECRET" type="password" autocomplete="off"></div>
+        <div class="form-row"><label>GitLab GITLAB_TOKEN</label>
+          <input id="sk_GITLAB_TOKEN" type="password" autocomplete="off"></div>
+        <div class="form-row"><label>模型池 LLM_POOL_KEY</label>
+          <input id="sk_LLM_POOL_KEY" type="password" autocomplete="off"></div>
+        <div class="form-row"><label>控制台 ADMIN_TOKEN</label>
+          <input id="sk_ADMIN_TOKEN" type="password" autocomplete="off"></div>
+      </div>
+      <p class="hint">当前值以星号掩码显示在输入框占位符里，服务端不回传明文；留空 = 不修改。
+        GitLab/模型池/ADMIN_TOKEN 热生效；钉钉凭据需重启审查服务；改 ADMIN_TOKEN 后本页面会要求重新输入令牌。</p>
     </div>
   </section>
 </div>
@@ -647,7 +682,7 @@ function loadTab(tab) {
   if (tab === "repos") { loadRepos(); loadCodehost(); }
   if (tab === "models") loadModels();
   if (tab === "caps") loadCaps();
-  if (tab === "channels") loadChannels();
+  if (tab === "channels") { loadChannels(); loadServer(); loadSecrets(); }
 }
 
 // ── 概览 ──
@@ -1079,6 +1114,52 @@ window.saveChannels = async () => {
     await api("/api/channels", { method: "PUT", headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body) });
     toast("通道与归档配置已保存" + RESTART_TIP);
+  } catch (e) { toast("保存失败：" + e.message, true); }
+};
+
+// ── 服务与代码托管 ──
+async function loadServer() {
+  const d = await api("/api/server");
+  $("#sv_api_base").value = d.api_base || "";
+  $("#sv_workers").value = d.workers ?? "";
+  $("#sv_max_steps").value = d.max_steps ?? "";
+  $("#sv_dedup").value = d.dedup_ttl_sec ?? "";
+}
+window.saveServer = async () => {
+  const body = { api_base: fv("sv_api_base") || null,
+                 workers: fnum("sv_workers"), max_steps: fnum("sv_max_steps"),
+                 dedup_ttl_sec: fnum("sv_dedup") };
+  try {
+    await api("/api/server", { method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body) });
+    toast("服务配置已保存，新任务自动生效（workers 需重启）");
+  } catch (e) { toast("保存失败：" + e.message, true); }
+};
+
+// ── 密钥（掩码展示，留空不改）──
+const SECRET_KEYS = ["DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET",
+                     "GITLAB_TOKEN", "LLM_POOL_KEY", "ADMIN_TOKEN"];
+async function loadSecrets() {
+  const d = await api("/api/secrets");
+  for (const k of SECRET_KEYS) {
+    const el = $("#sk_" + k);
+    if (!el) continue;
+    el.value = "";
+    el.placeholder = d[k] ? ("已设置：" + d[k] + "（留空不修改）") : "未设置";
+  }
+}
+window.saveSecrets = async () => {
+  const secrets = {};
+  for (const k of SECRET_KEYS) {
+    const v = fv("sk_" + k);
+    if (v) secrets[k] = v;
+  }
+  if (!Object.keys(secrets).length) { toast("没有要更新的密钥（留空 = 不修改）", true); return; }
+  try {
+    await api("/api/secrets", { method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ secrets }) });
+    toast("密钥已保存：" + Object.keys(secrets).join("、"));
+    loadSecrets();
   } catch (e) { toast("保存失败：" + e.message, true); }
 };
 

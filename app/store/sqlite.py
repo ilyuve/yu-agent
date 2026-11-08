@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS task_subscribers (
   task_id TEXT, user_id TEXT, requester TEXT, created_at REAL,
   UNIQUE(task_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY, value TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_tasks_dedup ON tasks(dedup_key, created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_task ON audit_logs(task_id);
 """
@@ -199,6 +202,24 @@ class SqliteStore:
             await db.execute("INSERT INTO feedback(task_id,user_id,score,comment,created_at) VALUES (?,?,?,?,?)",
                              (task_id, user_id, score, comment, time.time()))
             await db.commit()
+
+    # ── 配置版本号（热更新信标：控制台写入后 +1，Agent 进程轮询感知）──
+    async def config_version(self) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            row = await (await db.execute(
+                "SELECT value FROM meta WHERE key='config_version'")).fetchone()
+        return int(row[0]) if row else 0
+
+    async def bump_config_version(self) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO meta(key,value) VALUES('config_version','1')"
+                " ON CONFLICT(key) DO UPDATE SET"
+                " value=CAST(CAST(value AS INTEGER)+1 AS TEXT)")
+            await db.commit()
+            row = await (await db.execute(
+                "SELECT value FROM meta WHERE key='config_version'")).fetchone()
+        return int(row[0])
 
     # ── 订阅（去重拦截的触发者，任务完成时一并 @）──────────
     async def add_subscriber(self, task_id: str, requester: Requester) -> None:

@@ -11,7 +11,7 @@ import httpx
 from app.adapters import copywriting
 from app.adapters.dingtalk import DingTalkAdapter
 from app.agent.core import CapabilityRegistry
-from app.config import load_settings, require_env
+from app.config import ROOT, load_settings, require_env
 from app.engine.models import Requester, new_task
 from app.engine.queue import TaskEngine
 from app.integrations.codehost.gitlab import GitLabProvider
@@ -97,6 +97,8 @@ async def main() -> None:
         adapters["dingtalk"] = dingtalk
 
     async def submit_from_channel(capability: str, params: dict, requester: Requester):
+        # 服务参数每次从 ctx.settings 现读（热更新后即刻生效，不抓启动时的快照）
+        srv = ctx.settings["app"]["server"]
         # 仅代码类能力需要 head commit（幂等键）；问答类无 repo 参数
         head = ""
         if params.get("repo"):
@@ -116,8 +118,8 @@ async def main() -> None:
                     await adapter.reply_text(requester, f"❌ 无法开始审查：{e}")
                 return None, False
         task = new_task(capability, params, requester,
-                        prefix=server["task_id_prefix"], head_commit=head)
-        task, created = await engine.submit(task, server["dedup_ttl_sec"])
+                        prefix=srv["task_id_prefix"], head_commit=head)
+        task, created = await engine.submit(task, srv["dedup_ttl_sec"])
         adapter = adapters.get(requester.channel)
         if adapter:
             # 受理通知只对长流程（编排骨架类）发；问答类（agent_only）秒级完成，直接出答案
@@ -133,7 +135,7 @@ async def main() -> None:
                     # 订阅机制（§3.2）：被去重拦下的触发者登记为订阅者，完成时一并 @
                     await store.add_subscriber(task.id, requester)
                 dup_text = (f"相同变更的任务 #{task.id} 已在处理中，"
-                            f"{server['dedup_ttl_sec']} 秒内不重复排队，完成后会 @ 你。"
+                            f"{srv['dedup_ttl_sec']} 秒内不重复排队，完成后会 @ 你。"
                             if is_long_flow else "相同的问题正在回答中，请稍等。")
                 await adapter.reply_text(requester, dup_text)
         return task, created
@@ -165,6 +167,58 @@ async def main() -> None:
         repo_whitelist=ch["repo_whitelist"],
         repo_required=repo_required,
         classify=classify)
+
+    # ── 配置热更新（§15 P2 落地）──────────────────────────────
+    # 控制台写配置后 bump SQLite 里的 config_version（两个进程共享同一库文件）；
+    # 本进程每处理一条消息前比对一次（单点 sqlite 读，毫秒级），版本变了就重读
+    # yaml/.env 并原地重建注册表。在途任务持有旧对象快照不受影响；
+    # workers 数与钉钉 stream 连接（钉钉凭据）是进程级资源，仍需重启——界面已标注。
+    from dotenv import load_dotenv
+    reload_state = {"version": None}
+
+    async def maybe_reload() -> None:
+        try:
+            v = await store.config_version()
+        except Exception:
+            log.warning("config_version 读取失败（跳过热更新检查）", exc_info=True)
+            return
+        if reload_state["version"] is None:            # 首次只记基线
+            reload_state["version"] = v
+            return
+        if v == reload_state["version"]:
+            return
+        reload_state["version"] = v
+        nonlocal _classifier
+        log.info("检测到配置变更（config_version=%s），热加载中", v)
+        load_dotenv(ROOT / ".env", override=True)      # 密钥轮换（GitLab/模型池 token）
+        settings.clear()
+        settings.update(load_settings())               # 原地替换，ctx 引用保持有效
+        app_cfg = settings["app"]
+        ch_new = app_cfg["codehost"]
+        ctx.model_registry = ModelRegistry(settings["models"])
+        capabilities.caps = CapabilityRegistry(app_cfg["capabilities"]).caps
+        ctx.toolsets = tool_registry.build_registry(
+            settings, settings["scan_rules"]["rules"])
+        ctx.codehost = GitLabProvider(ch_new["api_base"], ch_new["token_env"],
+                                      ch_new["repo_whitelist"])
+        runners.clear()
+        for name, cap in capabilities.caps.items():
+            runners[name] = flows.get_runner(cap.get("flow", "agent_only"), ctx)
+        router.command_map = capabilities.command_map()
+        router.repo_whitelist = set(ch_new["repo_whitelist"])
+        router.repo_required = {n for n, c in capabilities.caps.items()
+                                if c.get("flow") == "review_pipeline"}
+        _classifier = None      # 能力清单/模型可能变了，下条消息重建分类器
+        log.info("热加载完成：白名单 %d 个仓库，能力 %s",
+                 len(router.repo_whitelist), list(capabilities.caps))
+
+    _orig_route = router.route
+
+    async def _route_with_reload(text: str):
+        await maybe_reload()
+        return await _orig_route(text)
+
+    router.route = _route_with_reload
 
     for adapter in adapters.values():
         adapter.router = router

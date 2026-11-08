@@ -32,13 +32,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.admin.config_store import (
+    SECRET_ENV_KEYS,
     add_capability_path,
     load_yaml,
+    mask_secret,
     remove_capability_path,
     save_capability,
     save_models,
     update_channels,
+    update_server,
     validate_capability,
+    write_env,
 )
 from app.config import ROOT, load_settings
 from app.store.sqlite import SqliteStore
@@ -102,6 +106,17 @@ class ChannelsUpdate(BaseModel):
     dingdoc: dict = {}
 
 
+class ServerUpdate(BaseModel):
+    api_base: str | None = None
+    workers: int | None = None
+    max_steps: int | None = None
+    dedup_ttl_sec: int | None = None
+
+
+class SecretsUpdate(BaseModel):
+    secrets: dict[str, str]
+
+
 def update_whitelist_in_yaml(config_path: Path, repos: list[str]) -> None:
     """定点改写 app.yaml 的 repo_whitelist 行，保留其余内容与注释。
 
@@ -136,15 +151,16 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
     # ── 访问控制：ADMIN_TOKEN 环境变量设置后，/api/* 全部要求令牌 ──
     # 内网部署必须设置（写接口可改模型端点/白名单，裸奔等于交出代码与 prompt）；
     # 未设置仅用于本地开发，启动时打警告。前端在 sessionStorage 存 token 并带头。
-    admin_token = os.environ.get("ADMIN_TOKEN", "")
-    if not admin_token:
+    # 令牌按请求读取：/api/secrets 热改 ADMIN_TOKEN 后无需重启本进程。
+    if not os.environ.get("ADMIN_TOKEN"):
         log.warning("ADMIN_TOKEN 未设置：管理控制台接口无鉴权（仅限本地开发，内网部署必须配置）")
 
     @app.middleware("http")
     async def require_admin_token(request, call_next):
-        if (admin_token
+        expected = os.environ.get("ADMIN_TOKEN", "")
+        if (expected
                 and request.url.path.startswith("/api/")
-                and request.headers.get("x-admin-token") != admin_token):
+                and request.headers.get("x-admin-token") != expected):
             return JSONResponse({"detail": "未授权：缺少或错误的 X-Admin-Token"},
                                 status_code=401)
         return await call_next(request)
@@ -201,6 +217,7 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
         # 审查进程（app.main）的白名单是启动时加载的，需重启才用上新值——
         # 前端保存提示已注明，热加载是 P2 预留。
         settings["app"]["codehost"]["repo_whitelist"] = repos
+        await store.bump_config_version()
         log.info("仓库白名单已更新: %s", repos)
         return {"repos": repos}
 
@@ -220,6 +237,7 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         settings["models"] = {"models": body.models, "routing": body.routing}
+        await store.bump_config_version()
         log.info("模型注册表已更新: %s", list(body.models))
         return {"ok": True, "models": list(body.models)}
 
@@ -271,6 +289,7 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         settings["app"]["capabilities"] = caps
+        await store.bump_config_version()
         log.info("能力已注册: %s", rel)
         return {"ok": True, "capabilities": caps}
 
@@ -287,6 +306,7 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
             await asyncio.to_thread(save_capability, dirs[name], data)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
+        await store.bump_config_version()
         log.info("能力已更新: %s", name)
         return {"ok": True}
 
@@ -302,6 +322,7 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         settings["app"]["capabilities"] = caps
+        await store.bump_config_version()
         log.info("能力已注销: %s（文件保留在 %s）", name, rel)
         return {"ok": True, "capabilities": caps}
 
@@ -329,9 +350,56 @@ def create_admin_app(settings: dict, store: SqliteStore) -> FastAPI:
         a["dingtalk"].update(body.dingtalk)
         a["report_sink"] = body.report_sink
         a.setdefault("dingdoc", {}).update(body.dingdoc)
+        await store.bump_config_version()
         log.info("通道与归档配置已更新: adapters=%s report_sink=%s",
                  body.adapters, body.report_sink)
         return {"ok": True}
+
+    # ── 服务与代码托管（app.yaml 的 server.* / codehost.api_base）──
+    @app.get("/api/server")
+    async def server_get():
+        a = settings["app"]
+        s = a.get("server", {})
+        return {"api_base": a.get("codehost", {}).get("api_base", ""),
+                "workers": s.get("workers"), "max_steps": s.get("max_steps"),
+                "dedup_ttl_sec": s.get("dedup_ttl_sec")}
+
+    @app.put("/api/server")
+    async def server_put(body: ServerUpdate):
+        try:
+            await asyncio.to_thread(update_server, app_yaml_path,
+                                    **body.model_dump(exclude_none=True))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        a = settings["app"]
+        for k in ("workers", "max_steps", "dedup_ttl_sec"):
+            v = getattr(body, k)
+            if v is not None:
+                a["server"][k] = v
+        if body.api_base is not None:
+            a.setdefault("codehost", {})["api_base"] = body.api_base
+        await store.bump_config_version()
+        log.info("服务与代码托管配置已更新: %s", body.model_dump(exclude_none=True))
+        return {"ok": True}
+
+    # ── 密钥（.env）：只回传星号掩码，写只接受白名单键的非空值 ──
+    @app.get("/api/secrets")
+    async def secrets_get():
+        return {k: mask_secret(os.environ.get(k, "")) for k in SECRET_ENV_KEYS}
+
+    @app.put("/api/secrets")
+    async def secrets_put(body: SecretsUpdate):
+        updates = {k: v for k, v in body.secrets.items() if v}
+        if not updates:
+            raise HTTPException(400, "没有要更新的密钥（留空 = 不修改）")
+        try:
+            await asyncio.to_thread(write_env, ROOT / ".env", updates)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        os.environ.update(updates)          # 本进程（含 ADMIN_TOKEN 校验）即时生效
+        await store.bump_config_version()   # Agent 进程经热更新轮询 load_dotenv 生效
+        log.info("密钥已更新: %s", {k: mask_secret(v) for k, v in updates.items()})
+        return {"ok": True, "updated": sorted(updates)}
 
     # ── 前端 ──────────────────────────────────────────────
     @app.get("/")

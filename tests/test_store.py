@@ -106,3 +106,13 @@ async def test_subscriber_add_list_dedupe(store):
     assert [s.user_id for s in subs] == ["u2", "u3"]  # 按订阅时间序
     assert subs[0].nick == "李四"                      # requester 全字段往返
     assert await store.list_subscribers("R_nope") == []
+
+
+async def test_config_version_bump(tmp_path):
+    """config_version 从 0 开始递增（热更新信标）。"""
+    store = SqliteStore(str(tmp_path / "t.db"))
+    await store.init()
+    assert await store.config_version() == 0
+    assert await store.bump_config_version() == 1
+    assert await store.bump_config_version() == 2
+    assert await store.config_version() == 2
