@@ -26,15 +26,18 @@ models:
     output_price: 14.3
 
 routing:                        # 按用途路由，Agent 只认 purpose 不认模型名
+                                # thinking：enabled/disabled/不写（不写 = 端点默认，V4.1 默认思考开）
   review:
     primary: deepseek-flash     # 审查主模型：flash 质量已验证，成本仅 pro 的 1/4
     fallback: [deepseek-v4-pro] # 不再指向已退役的 reasoner——fallback 断了等于整条链失败
+                                 # thinking 不写 = 思考开：深审是质量敏感任务，保留思考
   chat:                          # 问答/对话：便宜快速优先
     primary: deepseek-flash
     fallback: [deepseek-v4-pro]
   intent:                        # 意图分类：轻量模型，只输出小 JSON
     primary: deepseek-flash
     fallback: [deepseek-v4-pro]
+    thinking: disabled           # V4.1 思考默认开，分类任务关掉省 token 省延迟
   summary:
     primary: deepseek-flash
     fallback: [deepseek-v4-pro]

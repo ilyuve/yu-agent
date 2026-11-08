@@ -23,6 +23,9 @@ class ModelEntry:
 class Route:
     primary: str
     fallback: list[str] = field(default_factory=list)
+    # thinking 开关（DeepSeek V4.1：思考默认开启；intent 这类轻任务可关）。
+    # 取值 "enabled" / "disabled" / None（不写 = 跟随端点默认）
+    thinking: str | None = None
 
 
 class ModelRegistry:
