@@ -174,7 +174,9 @@ async def main() -> None:
     # yaml/.env 并原地重建注册表。在途任务持有旧对象快照不受影响；
     # workers 数与钉钉 stream 连接（钉钉凭据）是进程级资源，仍需重启——界面已标注。
     from dotenv import load_dotenv
-    reload_state = {"version": None}
+    # 基线在启动时就定格为本进程加载配置时的版本——若等首次轮询才记基线，
+    # 启动后到首次轮询之间的变更会被当成"基线"吞掉，永远补不上
+    reload_state = {"version": await store.config_version()}
 
     async def maybe_reload() -> None:
         try:
