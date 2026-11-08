@@ -10,6 +10,20 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from app.llm.registry import ModelEntry, ModelRegistry
 
 
+class DeepSeekChatModel(OpenAIChatModel):
+    """DeepSeek 专用：关闭 tool 强制（tool_choice=required）。
+
+    DeepSeek V4.1 起思考模式为服务端默认开启，而思考模式拒绝
+    tool_choice=required（实测 400："Thinking mode does not support
+    this tool_choice"）；auto / 不传则 200 且照常调用工具。
+    pydantic-ai 在结构化输出（output_type）场景默认会发 required，
+    这里声明不支持强制，框架即退化为发送 auto，输出工具照常可用。
+    """
+
+    def _supports_tool_forcing(self, model_settings, model_request_parameters) -> bool:
+        return False
+
+
 def build_model(entry: ModelEntry, thinking: str | None = None) -> OpenAIChatModel:
     api_key = os.environ.get(entry.api_key_env)
     if not api_key:
@@ -19,7 +33,8 @@ def build_model(entry: ModelEntry, thinking: str | None = None) -> OpenAIChatMod
     settings = None
     if thinking:
         settings = OpenAIChatModelSettings(extra_body={"thinking": {"type": thinking}})
-    return OpenAIChatModel(
+    cls = DeepSeekChatModel if "deepseek" in entry.base_url else OpenAIChatModel
+    return cls(
         entry.model,
         provider=OpenAIProvider(base_url=entry.base_url, api_key=api_key),
         settings=settings,

@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from app.llm.factory import build_model, for_purpose
+from app.llm.factory import DeepSeekChatModel, build_model, for_purpose
 from app.llm.registry import ModelRegistry
 
 CFG = {
@@ -52,3 +52,24 @@ def test_for_purpose_unknown_purpose_raises():
         assert "未定义的模型用途" in str(e)
     else:
         raise AssertionError("未定义用途应报 KeyError")
+
+
+def test_deepseek_model_disables_tool_forcing(monkeypatch):
+    """DeepSeek 思考模式（服务端默认开）拒绝 tool_choice=required，必须声明不支持强制。"""
+    monkeypatch.setenv("LLM_POOL_KEY", "test")
+    cfg = {"models": {"ds": {**CFG["models"]["m1"],
+                             "base_url": "https://api.deepseek.com/v1"}},
+           "routing": {"review": {"primary": "ds"}}}
+    model = for_purpose(ModelRegistry(cfg), "review").models[0]
+    assert isinstance(model, DeepSeekChatModel)
+    assert model._supports_tool_forcing(None, None) is False
+
+
+def test_non_deepseek_endpoint_keeps_default_model(monkeypatch):
+    """非 DeepSeek 端点不受此 hack 影响。"""
+    monkeypatch.setenv("LLM_POOL_KEY", "test")
+    cfg = {"models": {"other": {**CFG["models"]["m1"],
+                                "base_url": "https://pool.example.com/v1"}},
+           "routing": {"review": {"primary": "other"}}}
+    model = for_purpose(ModelRegistry(cfg), "review").models[0]
+    assert not isinstance(model, DeepSeekChatModel)
