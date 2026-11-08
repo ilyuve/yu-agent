@@ -1,36 +1,43 @@
 # 模型注册表（OpenAI 兼容）+ 用途路由 + 单价
-# 当前接入 DeepSeek 官方端点；换公司模型池时只改 base_url 与 api_key_env
+# 当前接入 DeepSeek 官方端点；换公司模型池时只改 base_url 与 api_key_env。
+#
+# 2026-11 现状（官方文档 api-docs.deepseek.com）：
+# - 只剩两个现役 ID：deepseek-flash（底层 V4.1-Flash-1017）与 deepseek-v4-pro（V4-Pro-0813）；
+# - deepseek-chat / deepseek-reasoner 已于 2026-07-24 退役（实测仍被宽容路由到 flash，
+#   但未承诺、随时会断，禁止再用）；
+# - 思考/非思考不再按模型名分：同一 ID 用 thinking 参数切换，思考默认开启。
 models:
-  deepseek-chat:
+  deepseek-flash:
     base_url: "https://api.deepseek.com/v1"
     api_key_env: LLM_POOL_KEY
-    model: "deepseek-chat"
+    model: "deepseek-flash"         # 底层 = V4.1-Flash-1017，支持视觉输入
     capabilities: [tool_call]
-    context_window: 131072        # 以官方文档为准
-    input_price: 2.0              # 元/百万 input tokens（刊例价估算，缓存命中更低）
-    output_price: 8.0
-  deepseek-reasoner:
+    context_window: 1000000         # 1M（官方文档）
+    # 刊例价 $0.15/$0.60 每百万（非高峰；高峰翻倍），按 ≈7.2 汇率折算估算
+    input_price: 1.1
+    output_price: 4.4
+  deepseek-v4-pro:
     base_url: "https://api.deepseek.com/v1"
     api_key_env: LLM_POOL_KEY
-    model: "deepseek-reasoner"
+    model: "deepseek-v4-pro"        # 底层 = V4-Pro-0813，并发上限 500（flash 2500）
     capabilities: [tool_call]
-    context_window: 131072
-    input_price: 4.0
-    output_price: 16.0
+    context_window: 1000000
+    input_price: 4.8
+    output_price: 14.3
 
 routing:                        # 按用途路由，Agent 只认 purpose 不认模型名
   review:
-    primary: deepseek-chat
-    fallback: [deepseek-reasoner]
+    primary: deepseek-flash     # 审查主模型：flash 质量已验证，成本仅 pro 的 1/4
+    fallback: [deepseek-v4-pro] # 不再指向已退役的 reasoner——fallback 断了等于整条链失败
   chat:                          # 问答/对话：便宜快速优先
-    primary: deepseek-chat
-    fallback: [deepseek-reasoner]
+    primary: deepseek-flash
+    fallback: [deepseek-v4-pro]
   intent:                        # 意图分类：轻量模型，只输出小 JSON
-    primary: deepseek-chat
-    fallback: [deepseek-reasoner]
+    primary: deepseek-flash
+    fallback: [deepseek-v4-pro]
   summary:
-    primary: deepseek-chat
-    fallback: [deepseek-reasoner]
+    primary: deepseek-flash
+    fallback: [deepseek-v4-pro]
   long_context:
-    primary: deepseek-chat
-    fallback: [deepseek-reasoner]
+    primary: deepseek-flash
+    fallback: [deepseek-v4-pro]
