@@ -75,9 +75,16 @@ async def run_bash(command: str, cwd: str, allowed_base: str | None = None) -> s
     # 最小环境：不给 GIT_* 变量（GIT_SSH_COMMAND/GIT_ASKPASS 等可执行任意命令）
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
            "HOME": str(base), "LC_ALL": "C.UTF-8"}
-    proc = await asyncio.create_subprocess_exec(
-        *argv, cwd=str(base), env=env,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv, cwd=str(base), env=env,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    except FileNotFoundError:
+        # 命令未安装（如 rg）：作为观测返回给 Agent，让它换 grep 等替代，
+        # 而不是异常炸掉整个任务
+        return f"命令 {cmd0} 在当前环境未安装，请改用白名单内其他命令（如 grep）"
+    except OSError as e:
+        return f"命令执行失败: {e}"
     out, _ = await proc.communicate()
     return out.decode(errors="replace")[:8000]
 

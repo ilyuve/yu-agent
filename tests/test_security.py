@@ -57,6 +57,17 @@ async def test_bash_blocks_git_dangerous_args(workdir):
     assert "被禁止" in await run_bash("find . -exec rm {} ;", cwd=str(workdir))
 
 
+async def test_bash_missing_command_returns_observation(workdir, monkeypatch):
+    # 命令未安装（如 rg）时返回观测文本让 Agent 换工具，而不是异常炸掉任务
+    import asyncio as _a
+
+    async def _boom(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "rg")
+    monkeypatch.setattr(_a, "create_subprocess_exec", _boom)
+    out = await run_bash("rg pattern .", cwd=str(workdir))
+    assert "未安装" in out
+
+
 async def test_bash_clean_env(workdir):
     # 子进程不继承 GIT_* 环境变量（防 GIT_SSH_COMMAND 类劫持）
     os.environ["GIT_SSH_COMMAND"] = "touch /tmp/should_not_run"
