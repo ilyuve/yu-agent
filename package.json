@@ -3,6 +3,6 @@
   "private": true,
   "description": "管理控制台预览入口（实际服务为 FastAPI）",
   "scripts": {
-    "dev": "sh scripts/dev.sh"
+    "dev": "sh scripts/dev.sh --demo"
   }
 }
