@@ -220,11 +220,19 @@ async def main() -> None:
 
     router.route = _route_with_reload
 
+    async def _reload_loop() -> None:
+        # 后台轮询：消息前检查保证"下条消息即时生效"，这里兜底"静默期也能生效"
+        #（默认 15s；配置写入到生效的最大延迟）
+        while True:
+            await asyncio.sleep(15)
+            await maybe_reload()
+
     for adapter in adapters.values():
         adapter.router = router
         adapter.on_task_raw = submit_from_channel
 
     await engine.start()
+    asyncio.create_task(_reload_loop())
     for adapter in adapters.values():
         await adapter.start(on_task=None)
     log.info("yu-agent 已启动（workers=%d, capabilities=%s, adapters=%s）",
