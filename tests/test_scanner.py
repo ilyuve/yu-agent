@@ -53,3 +53,25 @@ def test_scanner_scoped_to_changed_files(tmp_path: Path):
     hits = scan(str(tmp_path), _load_rules(), changed_files=["clean_dao.py"])
 
     assert hits == []
+
+
+def test_sq002_catches_update_set_without_where(tmp_path: Path):
+    """SQ002 必须覆盖 UPDATE ... SET 无 WHERE 的全表更新形态（冒烟中靠 LLM 兜底发现的缺口）。"""
+    (tmp_path / "job.py").write_text(
+        'db.execute("UPDATE orders SET status = \'closed\';")\n',
+        encoding="utf-8")
+
+    hits = scan(str(tmp_path), _load_rules())
+
+    assert any(h.rule_id == "SQ002" for h in hits), "无 WHERE 的 UPDATE...SET 未命中"
+
+
+def test_sq002_passes_update_with_where(tmp_path: Path):
+    """带 WHERE 的 UPDATE 是正常写法，SQ002 不得误报。"""
+    (tmp_path / "dao.py").write_text(
+        'db.execute("UPDATE orders SET status = \'closed\' WHERE id = %s", (oid,))\n',
+        encoding="utf-8")
+
+    hits = scan(str(tmp_path), _load_rules())
+
+    assert not any(h.rule_id == "SQ002" for h in hits), "带 WHERE 的 UPDATE 被误报"

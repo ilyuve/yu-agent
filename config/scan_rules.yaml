@@ -10,7 +10,9 @@ rules:
     name: update_delete_without_where
     severity: high
     pattern_type: regex
-    pattern: '(?i)\b(update|delete\s+from)\s+\w+\s*;'
+    # 两种形态：① UPDATE/DELETE 后直接跟分号（DELETE FROM t;）
+    # ② UPDATE t SET ...; 且分号前无 WHERE（单行语句；跨行形态靠 LLM 语义复核兜底）
+    pattern: '(?i)(?:\b(?:update|delete\s+from)\s+\w+\s*;|\bupdate\s+\w+\s+set\s+(?![^;]*\bwhere\b)[^;]*;)'
     description: "UPDATE/DELETE 必须带 WHERE"
   - id: SQ003
     name: like_prefix_wildcard
