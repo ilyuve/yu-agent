@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "codehost": { "url": "https://gitlab.example.com/-/mcp" }
+  }
+}

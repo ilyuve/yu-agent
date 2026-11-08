@@ -1,0 +1,38 @@
+# 慢查静态预扫规则集——归后端组维护，新增规则不改扫描器代码
+rules:
+  - id: SQ001
+    name: select_star
+    severity: medium
+    pattern_type: regex
+    pattern: '(?i)select\s+\*\s+from'
+    description: "禁止 SELECT *，显式列出字段"
+  - id: SQ002
+    name: update_delete_without_where
+    severity: high
+    pattern_type: regex
+    pattern: '(?i)\b(update|delete\s+from)\s+\w+\s*;'
+    description: "UPDATE/DELETE 必须带 WHERE"
+  - id: SQ003
+    name: like_prefix_wildcard
+    severity: high
+    pattern_type: regex
+    pattern: "(?i)like\\s+['\"]%"
+    description: "LIKE 前缀通配无法走索引"
+  - id: SQ004
+    name: large_offset
+    severity: medium
+    pattern_type: regex
+    pattern: '(?i)offset\s+\d{4,}'
+    description: "大 OFFSET 深分页，改用游标/键集分页"
+  - id: SQ005
+    name: function_on_index_column
+    severity: medium
+    pattern_type: regex
+    pattern: '(?i)where\s+\w+\s*\(\s*\w+\s*\)'
+    description: "WHERE 中对列套函数导致索引失效（需人工/LLM 复核）"
+  - id: SQ006
+    name: sql_in_loop
+    severity: high
+    pattern_type: regex
+    pattern: '(?i)(for|while)\b.{0,200}(select|insert|update|delete)\b'
+    description: "循环内执行 SQL，疑似 N+1"

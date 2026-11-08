@@ -1,0 +1,35 @@
+# 服务级配置（仓库内一律占位符；真实值走 .env / *.local.yaml 覆盖）
+server:
+  workers: 3                    # 并发审查数，按模型池 RPM 调
+  max_steps: 40                 # agent loop 步数上限（UsageLimits.request_limit）
+  dedup_ttl_sec: 300
+  task_id_prefix: "R"           # 任务号前缀（#R1042），与项目名解耦
+  clone_base_dir: /data/yu-agent/workspace
+  db_path: /data/yu-agent/yu-agent.db
+  reports_dir: /data/yu-agent/reports   # report_sink=local 时的报告落盘目录
+
+adapters:
+  - dingtalk                    # 未来加 feishu 只加一行 + 新增 adapter 文件
+
+dingtalk:
+  client_id_env: DINGTALK_CLIENT_ID
+  client_secret_env: DINGTALK_CLIENT_SECRET
+
+report_sink: local              # local = 报告落本地文件（开箱即用）；dingdoc = 钉钉文档库（配好下方两项后切换）
+dingdoc:
+  workspace_id: "<fill-in>"              # 钉钉知识库 ID（获取知识库列表接口可查）
+  operator_id: "<fill-in>"               # 操作人 unionId（文档 API 强制要求，建议专用运维账号）
+
+codehost:                       # 代码托管平台（设计文档 §3.5.1）
+  provider: gitlab              # 首期 gitlab；未来 gitee/github 换实现
+  api_base: "https://gitlab.example.com/api/v4"   # 占位符
+  token_env: GITLAB_TOKEN
+  repo_whitelist: ["payment", "user-center"]   # 配置文件化；P2 管理控制台代为编辑热加载
+
+scanner:
+  rules_path: config/scan_rules.yaml   # 预扫规则集，改规则不改代码
+
+capabilities:
+  - app/capabilities/code-review    # flow: review_pipeline（编排骨架 + Agent 深审）
+  - app/capabilities/qa             # flow: agent_only（纯问答）
+  # 未来新增能力只加一行

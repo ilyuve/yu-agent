@@ -1,0 +1,36 @@
+# 模型注册表（OpenAI 兼容）+ 用途路由 + 单价
+# 当前接入 DeepSeek 官方端点；换公司模型池时只改 base_url 与 api_key_env
+models:
+  deepseek-chat:
+    base_url: "https://api.deepseek.com/v1"
+    api_key_env: LLM_POOL_KEY
+    model: "deepseek-chat"
+    capabilities: [tool_call]
+    context_window: 131072        # 以官方文档为准
+    input_price: 2.0              # 元/百万 input tokens（刊例价估算，缓存命中更低）
+    output_price: 8.0
+  deepseek-reasoner:
+    base_url: "https://api.deepseek.com/v1"
+    api_key_env: LLM_POOL_KEY
+    model: "deepseek-reasoner"
+    capabilities: [tool_call]
+    context_window: 131072
+    input_price: 4.0
+    output_price: 16.0
+
+routing:                        # 按用途路由，Agent 只认 purpose 不认模型名
+  review:
+    primary: deepseek-chat
+    fallback: [deepseek-reasoner]
+  chat:                          # 问答/对话：便宜快速优先
+    primary: deepseek-chat
+    fallback: [deepseek-reasoner]
+  intent:                        # 意图分类：轻量模型，只输出小 JSON
+    primary: deepseek-chat
+    fallback: [deepseek-reasoner]
+  summary:
+    primary: deepseek-chat
+    fallback: [deepseek-reasoner]
+  long_context:
+    primary: deepseek-chat
+    fallback: [deepseek-reasoner]

@@ -1,0 +1,14 @@
+name: code-review
+description: "审查 GitLab 仓库分支/MR 代码：慢查询风险 + 通用 CR，产出结构化报告归档"
+triggers:
+  command: "review"
+flow: review_pipeline          # 流程类型（engine/flows.py 注册表）：编排骨架 + Agent 深审
+                               # 问答/通用能力用 agent_only（纯 Agent 循环，不拉代码不归档）
+skill_names: [slow-query, code-style]
+toolsets:
+  - local.git                  # 浅克隆/本地 grep
+  - local.scanner              # 静态预扫
+  - local.bash                 # 受限只读命令
+  # - mcp.codehost             # 代码托管 MCP（平台无关命名）；GitLab 实例连通、registry 取消注释后再打开
+model_purpose: review
+output: review_report          # 结构化输出（schema 强约束）；问答类用 text

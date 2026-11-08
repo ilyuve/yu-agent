@@ -1,0 +1,13 @@
+services:
+  yu-agent:
+    build: ..
+    container_name: yu-agent
+    env_file: ../.env              # 真实凭据（严禁提交）
+    volumes:
+      - yu-agent-data:/data/yu-agent   # 克隆工作区 / SQLite / 本地报告归档
+    ports:
+      - "17100:17100"              # 管理控制台
+    restart: unless-stopped
+
+volumes:
+  yu-agent-data:

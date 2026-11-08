@@ -1,0 +1,9 @@
+name: qa
+description: "通用技术问答：后端开发问题解答，直接文本回复"
+triggers:
+  command: "ask"               # @bot ask <问题>；也可作为意图识别失败时的兜底能力
+flow: agent_only               # 纯 Agent 循环：不拉代码、不预扫、不归档，结果直接回复
+skill_names: [assistant]
+toolsets: []                   # 纯问答不挂工具；后续可按需声明（如 mcp.wiki）
+model_purpose: chat            # 走便宜快速的模型（models.yaml routing.chat）
+output: text                   # 自由文本输出，由通道直接回复

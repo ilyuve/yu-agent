@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 测试夹具：故意埋入慢查问题，供 test_scanner 断言命中 -->
+<mapper namespace="com.example.OrderMapper">
+  <select id="listAll" resultType="map">
+    SELECT * FROM orders
+  </select>
+
+  <select id="fuzzy" resultType="map">
+    SELECT id, title FROM item WHERE title LIKE '%手机%'
+  </select>
+
+  <delete id="purge">
+    DELETE FROM orders;
+  </delete>
+</mapper>

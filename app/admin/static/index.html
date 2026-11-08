@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>yu-agent 控制台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400&display=swap" rel="stylesheet">
+<style>
+/* 设计令牌：
+   浅灰绿底 #f2f4f2 / 品牌深绿 #255a41 / outline 胶囊徽章 /
+   左对齐大标题 hero / 灰 pill 导航（active 白底描边）/
+   Instrument Sans / 进场 opacity 1.2s cubic-bezier(0.22,1,0.36,1)
+   氛围：印象派风景（维特尼夏日塞纳河）分层模糊融入背景，缓慢流动 */
+:root {
+  --bg: #f2f4f2;
+  --card: #ffffff;
+  --card-soft: #f7f8f7;
+  --border: #e6e6e6;
+  --border-strong: #dcdcdc;
+  --text: #0f0d0c;
+  --text-2: #141414;
+  --text-dim: #83828c;
+  --text-dim-2: #636261;
+  --green: #255a41;
+  --green-hover: #1e4a35;
+  --green-band: #cdecc8;
+  --green-band-deep: #8fcb84;
+  --green-tint: #e7f4e4;
+  --ok: #255a41;
+  --run: #3b6fd4;
+  --warn: #b07d2a;
+  --err: #c4453c;
+  --radius-card: 12px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-card: 0 0 0 1px var(--border), 0 0 48px rgba(12,12,13,.04), 0 0 12px rgba(12,12,13,.05);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Instrument Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── 印象派氛围背景（维特尼夏日塞纳河，公版画作，Met CC0）──
+   画作双层模糊蒙版：上部依稀可辨 → 向下更模糊并消融入底色；
+   色渍层（河绿/水蓝/雾紫/暖光）持续缓慢流动；画布颗粒提质感 */
+.bg-art {
+  position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  background: linear-gradient(180deg, #e9f0e9 0%, #eef2ee 38%, var(--bg) 62%, #eff1ec 100%);
+}
+/* 画作横幅：两层同图不同模糊度 + 纵向蒙版，从上到下渐模糊渐消失 */
+.painting { position: absolute; top: 0; left: 0; right: 0; height: 52vh; min-height: 320px; }
+.painting img {
+  position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover;
+  object-position: center 38%;
+  animation: paintFlow 42s ease-in-out infinite alternate;
+}
+.painting .layer-sharp {
+  filter: blur(3px) saturate(1.06) brightness(1.03);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,.55) 34%, transparent 62%);
+          mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,.55) 34%, transparent 62%);
+}
+.painting .layer-blur {
+  filter: blur(22px) saturate(1.1) brightness(1.04);
+  -webkit-mask-image: linear-gradient(180deg, transparent 12%, rgba(0,0,0,.9) 46%, transparent 88%);
+          mask-image: linear-gradient(180deg, transparent 12%, rgba(0,0,0,.9) 46%, transparent 88%);
+}
+/* 融合罩：让画作底部彻底化入页面底色 */
+.painting::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(238,242,238,.12) 0%, rgba(238,242,238,.55) 52%, var(--bg) 90%);
+}
+@keyframes paintFlow {
+  from { transform: translateX(0) scale(1.02); }
+  to   { transform: translateX(-1.8%) scale(1.09); }
+}
+/* 流动色渍：河绿 / 水蓝 / 雾紫 / 暖光，multiply 混合，持续漂移 */
+.wash { position: absolute; border-radius: 50%; mix-blend-mode: multiply; }
+.w1 { width: 700px; height: 460px; top: -140px; left: -120px;
+      background: radial-gradient(ellipse at center, #aed3a6 0%, transparent 68%);
+      filter: blur(56px); opacity: .55; animation: drift1 34s ease-in-out infinite alternate; }
+.w2 { width: 580px; height: 420px; top: -60px; right: -110px;
+      background: radial-gradient(ellipse at center, #a5c5db 0%, transparent 68%);
+      filter: blur(62px); opacity: .5; animation: drift2 41s ease-in-out infinite alternate; }
+.w3 { width: 520px; height: 380px; top: 22%; right: 8%;
+      background: radial-gradient(ellipse at center, #c9bde0 0%, transparent 70%);
+      filter: blur(72px); opacity: .36; animation: drift3 47s ease-in-out infinite alternate; }
+.w4 { width: 780px; height: 430px; bottom: -160px; left: 10%;
+      background: radial-gradient(ellipse at center, #dde7bf 0%, transparent 70%);
+      filter: blur(70px); opacity: .45; animation: drift1 52s ease-in-out infinite alternate-reverse; }
+.w5 { width: 480px; height: 340px; top: 46%; left: -8%;
+      background: radial-gradient(ellipse at center, #9cba9b 0%, transparent 70%);
+      filter: blur(66px); opacity: .3; animation: drift2 38s ease-in-out infinite alternate-reverse; }
+/* 两抹"笔触"：拉长模糊椭圆，随色渍一起缓慢流动 */
+.brush { position: absolute; border-radius: 50%; }
+.b1 { width: 640px; height: 130px; top: 34%; left: 28%;
+      background: linear-gradient(90deg, rgba(140,196,158,.5) 0%, rgba(90,140,150,.16) 80%);
+      filter: blur(44px); opacity: .5; animation: brushFlow 36s ease-in-out infinite alternate; }
+.b2 { width: 480px; height: 95px; top: 52%; left: 50%;
+      background: linear-gradient(90deg, rgba(165,197,219,.48) 0%, rgba(140,196,158,.2) 90%);
+      filter: blur(48px); opacity: .4; animation: brushFlow 44s ease-in-out infinite alternate-reverse; }
+@keyframes drift1 { from { transform: translate(0,0) rotate(0deg); } to { transform: translate(90px, 44px) rotate(4deg); } }
+@keyframes drift2 { from { transform: translate(0,0) rotate(0deg); } to { transform: translate(-76px, 56px) rotate(-3deg); } }
+@keyframes drift3 { from { transform: translate(0,0); } to { transform: translate(52px, -48px); } }
+@keyframes brushFlow {
+  from { transform: translateX(0) rotate(-7deg); }
+  to   { transform: translateX(-90px) rotate(-4deg); }
+}
+/* 画布颗粒 */
+.grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .055; mix-blend-mode: multiply; }
+
+.shell { position: relative; z-index: 1; max-width: 1160px; margin: 0 auto; padding: 0 28px 64px; }
+
+/* ── 顶栏：logo 左、状态右、底部分隔 ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px; margin: 0 -28px; padding: 0 28px;
+  border-bottom: 1px solid rgba(15,13,12,.08);
+  animation: fadeIn .8s var(--ease-out) both;
+}
+.brand { display: flex; align-items: center; gap: 11px; }
+.logo {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--green); color: #fdfdfd;
+  display: grid; place-items: center;
+}
+.logo svg { width: 19px; height: 19px; }
+.brand .name { font-size: 17px; font-weight: 600; letter-spacing: .2px; color: var(--text-2); }
+.brand .ver { font-size: 11px; font-weight: 600; color: var(--text-dim-2); background: rgba(255,255,255,.75); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; }
+.health { font-size: 12.5px; color: var(--text-dim-2); display: flex; align-items: center; gap: 7px; }
+.health .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* ── Hero：左对齐、大标题、灰副文案 ── */
+.hero { padding: 52px 0 32px; animation: heroIn 1.2s var(--ease-out) .1s both; }
+@keyframes heroIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+/* 中文排版：字重 500（非标字重会触发合成加粗），字距微开，行高 1.45 */
+.hero h1 { font-size: 36px; font-weight: 500; line-height: 1.45; letter-spacing: .015em; color: var(--text); }
+.hero .sub { font-size: 15px; font-weight: 400; line-height: 1.8; letter-spacing: .01em; color: var(--text-dim-2); margin-top: 14px; max-width: 600px; }
+
+/* ── 导航：灰 pill 组，active 白底描边 ── */
+nav {
+  display: flex; gap: 6px; width: fit-content; max-width: 100%; margin: 6px 0 26px;
+  background: rgba(15,13,12,.05); border-radius: 999px; padding: 5px;
+  flex-wrap: wrap; row-gap: 5px;
+  animation: heroIn 1.2s var(--ease-out) .22s both;
+}
+nav button {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  border: 1px solid transparent; background: transparent; color: var(--text-dim-2);
+  font-size: 13.5px; padding: 8px 18px; border-radius: 999px; cursor: pointer;
+  transition: background-color .18s, border-color .18s, color .18s;
+  font-weight: 500; font-family: inherit;
+}
+nav button svg { width: 15px; height: 15px; }
+nav button:hover { color: var(--text); }
+nav button.active { background: var(--card); border-color: var(--border-strong); color: var(--text); box-shadow: 0 1px 4px rgba(12,12,13,.06); }
+
+.panel { display: none; }
+.panel.active { display: block; animation: heroIn .6s var(--ease-out) both; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── 卡片 ── */
+.grid { display: grid; gap: 16px; }
+.grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 900px) { .grid.cols-4 { grid-template-columns: repeat(2,1fr); } .grid.cols-2 { grid-template-columns: 1fr; } }
+.card {
+  background: var(--card); border-radius: var(--radius-card);
+  padding: 20px 22px; box-shadow: var(--shadow-card);
+  transition: transform .3s var(--ease-out), box-shadow .3s var(--ease-out);
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--border-strong), 0 10px 30px rgba(12,12,13,.07); }
+.card .label { font-size: 12.5px; color: var(--text-dim); letter-spacing: .3px; margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
+.card .label svg { width: 14px; height: 14px; color: var(--green); }
+.card .value { font-size: 28px; font-weight: 650; color: var(--text-2); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.card .sub { font-size: 12px; color: var(--text-dim); margin-top: 7px; }
+.card h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card h3 svg { width: 15px; height: 15px; color: var(--green); }
+
+/* ── 表格 ── */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--text-dim); font-weight: 500; font-size: 12px; letter-spacing: .4px; padding: 9px 13px; border-bottom: 1px solid var(--border); }
+td { padding: 11px 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; color: var(--text-2); }
+tbody tr { transition: background-color .18s; }
+tbody tr:hover { background: var(--card-soft); }
+.mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; }
+
+/* ── 徽章 ── */
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 3px 11px; border-radius: 999px; }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.done { color: var(--ok); background: var(--green-tint); }
+.badge.running { color: var(--run); background: #e3ecfb; }
+.badge.running::before { animation: pulse 1.2s infinite; }
+.badge.failed { color: var(--err); background: #fbe7e5; }
+.badge.pending { color: var(--warn); background: #f7efdc; }
+
+/* ── 仓库配置 ── */
+.repo-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
+.repo-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card-soft); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 15px;
+  transition: background-color .18s, border-color .18s;
+  animation: heroIn .4s var(--ease-out) both;
+}
+.repo-item:hover { border-color: var(--border-strong); background: #fff; }
+.repo-item .name { font-family: "SF Mono", Menlo, monospace; font-size: 13px; display: flex; align-items: center; gap: 9px; color: var(--text-2); }
+.repo-item .name svg { width: 15px; height: 15px; color: var(--green); flex-shrink: 0; }
+.repo-item .del { border: 0; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 15px; padding: 3px 8px; border-radius: 6px; transition: background-color .18s, color .18s; }
+.repo-item .del:hover { color: var(--err); background: #fbe7e5; }
+.add-row { display: flex; gap: 10px; }
+.add-row input[type=text] {
+  flex: 1; background: var(--card); border: 1px solid var(--border);
+  border-radius: 999px; padding: 10px 18px; color: var(--text); font-size: 13.5px;
+  outline: none; transition: border-color .18s, box-shadow .18s;
+  font-family: "SF Mono", Menlo, monospace;
+}
+.add-row input[type=text]:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(37,90,65,.12); }
+
+/* ── 按钮：深绿实心 32px 胶囊 ── */
+.btn {
+  border: 0; border-radius: 32px; padding: 0 22px; height: 40px; font-size: 14px; font-weight: 500;
+  cursor: pointer; color: #fdfdfd; background: var(--green);
+  transition: background-color .18s, transform .18s; font-family: inherit;
+}
+.btn:hover { background: var(--green-hover); transform: translateY(-1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.btn.ghost { background: var(--card); color: var(--text-2); border: 1px solid var(--border); }
+.btn.ghost:hover { border-color: var(--border-strong); background: var(--card-soft); }
+.hint { font-size: 12.5px; color: var(--text-dim); margin-top: 13px; line-height: 1.75; }
+
+/* ── 配置查看 ── */
+.cfg-tree { font-family: "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.85; white-space: pre-wrap; word-break: break-all; color: var(--text-dim-2); }
+.cfg-key { color: var(--green); }
+
+/* ── toast ── */
+.toast {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(70px);
+  background: var(--text-2); color: #fdfdfd;
+  padding: 11px 24px; border-radius: 999px; font-size: 13px; z-index: 99;
+  box-shadow: 0 8px 28px rgba(12,12,13,.22);
+  transition: transform .4s var(--ease-out), opacity .4s var(--ease-out); opacity: 0;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.err { background: var(--err); }
+
+/* ── 任务详情抽屉（审计回放）── */
+.drawer-mask {
+  position: fixed; inset: 0; background: rgba(15,13,12,.28); z-index: 90;
+  opacity: 0; pointer-events: none; transition: opacity .3s var(--ease-out);
+  backdrop-filter: blur(2px);
+}
+.drawer-mask.show { opacity: 1; pointer-events: auto; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 92vw; z-index: 91;
+  background: var(--bg); box-shadow: -16px 0 48px rgba(12,12,13,.16);
+  transform: translateX(100%); transition: transform .38s var(--ease-out);
+  display: flex; flex-direction: column;
+}
+.drawer.show { transform: translateX(0); }
+.drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.72);
+  backdrop-filter: blur(8px);
+}
+.drawer-head .title { font-size: 15px; font-weight: 600; color: var(--text-2); display: flex; align-items: center; gap: 10px; }
+.drawer-close {
+  border: 0; background: transparent; font-size: 18px; color: var(--text-dim-2);
+  cursor: pointer; padding: 5px 10px; border-radius: 8px; transition: background-color .18s, color .18s;
+}
+.drawer-close:hover { background: rgba(15,13,12,.06); color: var(--text); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px 40px; }
+.kv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
+.kv { background: var(--card); border-radius: 10px; box-shadow: var(--shadow-card); padding: 12px 15px; }
+.kv .k { font-size: 11.5px; color: var(--text-dim); margin-bottom: 5px; }
+.kv .v { font-size: 13.5px; color: var(--text-2); font-weight: 500; word-break: break-all; }
+.kv.wide { grid-column: 1 / -1; }
+.section-label { font-size: 12.5px; font-weight: 600; color: var(--text-dim-2); letter-spacing: .4px; margin: 20px 0 10px; }
+.audit-card { background: var(--card); border-radius: 10px; box-shadow: var(--shadow-card); overflow: hidden; }
+.audit-totals { display: flex; gap: 18px; padding: 12px 15px; background: var(--card-soft); border-top: 1px solid var(--border); font-size: 12.5px; color: var(--text-dim-2); flex-wrap: wrap; }
+.audit-totals b { color: var(--green); font-weight: 600; }
+
+/* ── 审计时间线（逐步耗时 / 日志 / 异常）── */
+.tl { position: relative; padding: 8px 6px 6px 24px; }
+.tl::before {
+  content: ""; position: absolute; left: 11px; top: 16px; bottom: 16px;
+  width: 2px; background: var(--border); border-radius: 1px;
+}
+.tl-item { position: relative; padding: 7px 10px 7px 14px; border-radius: 10px; transition: background-color .18s; }
+.tl-item:hover { background: rgba(255,255,255,.65); }
+.tl-item::before {
+  content: ""; position: absolute; left: -18px; top: 13px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--text-dim-2); box-shadow: 0 0 0 3px var(--card);
+}
+.tl-item.k-stage::before { background: #7c6cf0; }
+.tl-item.k-llm_request::before, .tl-item.k-llm_run::before { background: var(--green); }
+.tl-item.k-tool_call::before { background: #e8a13c; }
+.tl-item.k-error::before { background: var(--err); }
+.tl-head { display: flex; align-items: baseline; gap: 10px; }
+.tl-name { font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+.tl-item.k-error .tl-name { color: var(--err); }
+.tl-lat { margin-left: auto; font-size: 12.5px; color: var(--text-dim-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+.tl-detail { margin-top: 5px; }
+.tl-detail summary { font-size: 12px; color: var(--text-dim-2); cursor: pointer; user-select: none; }
+.tl-detail pre {
+  margin: 6px 0 2px; padding: 10px 12px; background: var(--card); border-radius: 8px;
+  font-size: 11.5px; line-height: 1.6; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto;
+}
+.result-box { background: var(--card); border-radius: 10px; box-shadow: var(--shadow-card); padding: 14px 16px; font-size: 13px; line-height: 1.75; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+.result-box.err { color: var(--err); background: #fdf3f2; }
+tr.clickable { cursor: pointer; }
+
+/* ── 配置编辑：卡片操作按钮 / 行内小按钮 / 弹窗表单 ── */
+.card-action { margin-left: auto; }
+.btn-sm { height: 30px; padding: 0 14px; font-size: 12.5px; }
+.row-btn {
+  border: 0; background: transparent; color: var(--text-dim-2); cursor: pointer;
+  font-size: 12.5px; padding: 4px 10px; border-radius: 6px;
+  transition: background-color .18s, color .18s; font-family: inherit;
+}
+.row-btn:hover { background: rgba(15,13,12,.06); color: var(--text); }
+.row-btn.danger:hover { background: #fbe7e5; color: var(--err); }
+select, .form-row input, .tbl-input {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 11px; color: var(--text-2); font-size: 13px; outline: none;
+  font-family: inherit; transition: border-color .18s, box-shadow .18s;
+}
+select:focus, .form-row input:focus, .tbl-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(37,90,65,.12); }
+.modal-mask {
+  position: fixed; inset: 0; background: rgba(15,13,12,.3); z-index: 95;
+  opacity: 0; pointer-events: none; transition: opacity .25s var(--ease-out);
+  backdrop-filter: blur(2px);
+}
+.modal-mask.show { opacity: 1; pointer-events: auto; }
+.modal {
+  position: fixed; top: 50%; left: 50%; z-index: 96; width: 480px; max-width: 92vw;
+  background: var(--bg); border-radius: 14px; box-shadow: 0 24px 64px rgba(12,12,13,.22);
+  transform: translate(-50%, -48%) scale(.97); opacity: 0; pointer-events: none;
+  transition: transform .3s var(--ease-out), opacity .25s var(--ease-out);
+  max-height: 86vh; display: flex; flex-direction: column;
+}
+.modal.show { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 22px; border-bottom: 1px solid var(--border);
+  font-size: 15px; font-weight: 600; color: var(--text-2);
+}
+.modal-body { padding: 18px 22px; overflow-y: auto; }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 14px 22px; border-top: 1px solid var(--border);
+}
+.form-row { margin-bottom: 13px; }
+.form-row label { display: block; font-size: 12.5px; color: var(--text-dim-2); margin-bottom: 6px; }
+.form-row input, .form-row select { width: 100%; }
+.form-row input:disabled { background: var(--card-soft); color: var(--text-dim); }
+.form-row .tip { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+.empty { text-align: center; color: var(--text-dim); padding: 40px 0; font-size: 13px; }
+.mt { margin-top: 16px; }
+</style>
+</head>
+<body>
+<!-- 印象派氛围背景：画作（公版，Met CC0）分层模糊消隐 + 流动色渍 + 画布颗粒 -->
+<div class="bg-art" aria-hidden="true">
+  <div class="painting">
+    <img class="layer-sharp" src="/static/assets/vetheuil-summer.jpg" alt="">
+    <img class="layer-blur" src="/static/assets/vetheuil-summer.jpg" alt="">
+  </div>
+  <div class="wash w1"></div>
+  <div class="wash w2"></div>
+  <div class="wash w3"></div>
+  <div class="wash w4"></div>
+  <div class="wash w5"></div>
+  <div class="brush b1"></div>
+  <div class="brush b2"></div>
+  <svg class="grain" xmlns="http://www.w3.org/2000/svg">
+    <filter id="grainNoise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#grainNoise)"/>
+  </svg>
+</div>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.4-6.3-4.6-6.3 4.6L8 13.6 2 9.2h7.6z"/></svg>
+      </div>
+      <span class="name">yu-agent</span>
+      <span class="ver">M1</span>
+    </div>
+    <div class="health"><span class="dot"></span><span id="healthText">连接中…</span></div>
+  </div>
+
+  <section class="hero">
+    <h1>智能体运行控制台</h1>
+    <p class="sub">观测每一次任务的 token 与成本，管理可被审查的代码仓库。群内 @ 触发审查，只有白名单内的仓库会被执行。</p>
+  </section>
+
+  <nav>
+    <button class="active" data-tab="overview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      概览</button>
+    <button data-tab="tasks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+      任务</button>
+    <button data-tab="repos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z" transform="translate(4 4) scale(.67)"/></svg>
+      仓库</button>
+    <button data-tab="models">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><line x1="9" y1="1.5" x2="9" y2="4"/><line x1="15" y1="1.5" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22.5"/><line x1="15" y1="20" x2="15" y2="22.5"/><line x1="1.5" y1="9" x2="4" y2="9"/><line x1="1.5" y1="15" x2="4" y2="15"/><line x1="20" y1="9" x2="22.5" y2="9"/><line x1="20" y1="15" x2="22.5" y2="15"/></svg>
+      模型</button>
+    <button data-tab="caps">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.4-6.3-4.6-6.3 4.6L8 13.6 2 9.2h7.6z"/></svg>
+      能力</button>
+    <button data-tab="channels">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      通道与归档</button>
+  </nav>
+
+  <!-- 概览 -->
+  <section class="panel active" id="panel-overview">
+    <div class="grid cols-4" id="statCards"></div>
+    <div class="grid cols-4 mt" id="cfgCards"></div>
+    <div class="grid cols-2 mt">
+      <div class="card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>分模型用量</h3>
+        <table id="modelTable">
+          <thead><tr><th>模型</th><th>次数</th><th>输入 tokens</th><th>输出 tokens</th><th>成本（元）</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>最近 LLM 调用</h3>
+        <table id="auditTable">
+          <thead><tr><th>任务</th><th>模型</th><th>tokens</th><th>耗时</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 任务 -->
+  <section class="panel" id="panel-tasks">
+    <div class="card">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>任务列表</h3>
+      <table id="taskTable">
+        <thead><tr><th>任务号</th><th>能力</th><th>参数</th><th>状态</th><th>发起人</th><th>耗时</th><th>创建时间</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 仓库配置 -->
+  <section class="panel" id="panel-repos">
+    <div class="grid cols-2">
+      <div class="card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z" transform="translate(4 4) scale(.67)"/></svg>仓库白名单</h3>
+        <div class="repo-list" id="repoList"></div>
+        <div class="add-row">
+          <input type="text" id="repoInput" placeholder="输入仓库名，如 order-service">
+          <button class="btn" id="addRepoBtn">添加</button>
+        </div>
+        <p class="hint">
+          只有在白名单内的仓库才能被 @ 触发审查（群内自然语言或显式命令均受此约束）。<br>
+          修改即时生效并写回 <span class="mono">config/app.yaml</span>，重启后不丢失。
+        </p>
+      </div>
+      <div class="card">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>托管平台</h3>
+        <div class="cfg-tree" id="codehostCfg"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 模型与配置 -->
+  <section class="panel" id="panel-models">
+    <div class="card">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/></svg>模型注册表
+        <button class="btn btn-sm card-action" onclick="openModelModal()">+ 添加模型</button></h3>
+      <table id="modelRegTable">
+        <thead><tr><th>名称</th><th>真实模型</th><th>base_url</th><th>上下文</th><th>单价 入/出（元/百万）</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="hint">密钥不落配置文件：每个模型只存 <span class="mono">api_key_env</span>（环境变量名），真实 key 放在服务器的 <span class="mono">.env</span>。</p>
+    </div>
+
+    <div class="card mt">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>用途路由
+        <button class="btn btn-sm card-action" onclick="saveRouting()">保存路由</button></h3>
+      <table id="routingTable">
+        <thead><tr><th>用途</th><th>主模型</th><th>备选（逗号分隔，按顺序降级）</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="hint">Agent 只认用途不认模型名：换模型只改这里，不改代码。<span class="mono">review</span> 用于代码审查，<span class="mono">intent</span> 用于意图分类，<span class="mono">chat</span> 用于问答。</p>
+    </div>
+
+  </section>
+
+  <!-- 能力 -->
+  <section class="panel" id="panel-caps">
+    <div class="card">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.4-6.3-4.6-6.3 4.6L8 13.6 2 9.2h7.6z"/></svg>能力注册
+        <button class="btn btn-sm card-action" onclick="openCapModal()">+ 新建能力</button></h3>
+      <table id="capTable">
+        <thead><tr><th>名称</th><th>描述</th><th>流程</th><th>命令</th><th>模型用途</th><th>输出</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="hint">「注销」只从注册表移除、能力目录文件保留，可手动加回。模型与能力改动写回配置文件，运行中的审查服务重启后完全生效。</p>
+    </div>
+
+  </section>
+
+  <!-- 通道与归档 -->
+  <section class="panel" id="panel-channels">
+    <div class="card">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>通道与归档
+        <button class="btn btn-sm card-action" onclick="saveChannels()">保存</button></h3>
+      <div class="form-grid">
+        <div class="form-row"><label>消息通道（勾选启用）</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)">
+            <input type="checkbox" id="ch_dingtalk" style="width:auto"> 钉钉（stream 长连接）
+          </label>
+          <div class="tip">未来接飞书只加适配器文件，这里多一项勾选</div></div>
+        <div class="form-row"><label>报告归档（report_sink）</label>
+          <select id="ch_sink">
+            <option value="local">local（本地文件，开箱即用）</option>
+            <option value="dingdoc">dingdoc（钉钉知识库）</option>
+          </select></div>
+        <div class="form-row"><label>钉钉 client_id 环境变量名</label>
+          <input id="ch_cid" placeholder="DINGTALK_CLIENT_ID"></div>
+        <div class="form-row"><label>钉钉 client_secret 环境变量名</label>
+          <input id="ch_secret" placeholder="DINGTALK_CLIENT_SECRET"></div>
+        <div class="form-row"><label>知识库 workspace_id</label>
+          <input id="ch_ws" placeholder="归档选 dingdoc 时必填"></div>
+        <div class="form-row"><label>文档操作人 unionId</label>
+          <input id="ch_op" placeholder="归档选 dingdoc 时必填"></div>
+      </div>
+      <p class="hint">这里只存环境变量名，真实凭据在服务器的 <span class="mono">.env</span>。通道改动重启审查服务后生效。</p>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 任务详情抽屉：点任务行滑出，含审计回放 -->
+<div class="drawer-mask" id="drawerMask" onclick="closeTask()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="title" id="drawerTitle">任务详情</div>
+    <button class="drawer-close" onclick="closeTask()" title="关闭">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<!-- 通用编辑弹窗（模型 / 能力共用） -->
+<div class="modal-mask" id="modalMask" onclick="closeModal()"></div>
+<div class="modal" id="modal">
+  <div class="modal-head">
+    <span id="modalTitle"></span>
+    <button class="drawer-close" onclick="closeModal()" title="关闭">✕</button>
+  </div>
+  <div class="modal-body" id="modalBody"></div>
+  <div class="modal-foot">
+    <button class="btn ghost" onclick="closeModal()">取消</button>
+    <button class="btn" id="modalOk">保存</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmtTime = ts => ts ? new Date(ts*1000).toLocaleString("zh-CN", {hour12:false}) : "-";
+const fmtDur = (a,b) => (a&&b) ? (b-a).toFixed(1)+"s" : "-";
+const fmtNum = n => (n||0).toLocaleString();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const ICONS = {
+  tasks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>',
+  done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  token: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>',
+  channel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+  sink: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  chip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>',
+  repo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>',
+  cost: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+};
+
+function toast(msg, isErr=false) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = "toast show" + (isErr ? " err" : "");
+  setTimeout(() => t.className = "toast", 2600);
+}
+
+// 访问令牌：服务端设置 ADMIN_TOKEN 时，/api/* 需带 X-Admin-Token 头。
+// 首次 401 弹窗输入，存 sessionStorage（关页即清，不落盘）。
+function adminToken() {
+  let t = sessionStorage.getItem("admin_token");
+  if (t === null) {
+    t = prompt("请输入管理控制台访问令牌（ADMIN_TOKEN）：") || "";
+    sessionStorage.setItem("admin_token", t);
+  }
+  return t;
+}
+
+// 控制台与审查服务是两个进程：配置写回 yaml 立即落盘，但审查进程启动时加载，
+// 界面的内存更新不同步过去——所有配置保存提示统一带"重启后生效"。
+const RESTART_TIP = "\uff0c重启审查进程后生效";
+
+async function api(path, opts, retried) {
+  opts = opts || {};
+  opts.headers = Object.assign({"X-Admin-Token": adminToken()}, opts.headers);
+  const r = await fetch(path, opts);
+  if (r.status === 401 && !retried) {
+    sessionStorage.removeItem("admin_token");          // 令牌错误，重问一次
+    return api(path, opts, true);
+  }
+  if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText);
+  return r.json();
+}
+
+// ── Tab 切换 ──
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    $("#panel-" + btn.dataset.tab).classList.add("active");
+    loadTab(btn.dataset.tab);
+  };
+});
+
+function loadTab(tab) {
+  if (tab === "overview") loadOverview();
+  if (tab === "tasks") loadTasks();
+  if (tab === "repos") { loadRepos(); loadCodehost(); }
+  if (tab === "models") loadModels();
+  if (tab === "caps") loadCaps();
+  if (tab === "channels") loadChannels();
+}
+
+// ── 概览 ──
+async function loadOverview() {
+  const d = await api("/api/overview");
+  const st = d.tasks_by_status || {};
+  const cards = [
+    ["任务总数", fmtNum(d.tasks_total), `运行中 ${st.running||0} · 排队 ${st.pending||0}`, ICONS.tasks],
+    ["已完成", fmtNum(st.done||0), `失败 ${st.failed||0}`, ICONS.done],
+    ["Token 总量", fmtNum(d.tokens_in + d.tokens_out), `输入 ${fmtNum(d.tokens_in)} · 输出 ${fmtNum(d.tokens_out)}`, ICONS.token],
+    ["累计成本", "¥ " + (d.cost_total||0).toFixed(4), "按 models.yaml 单价估算", ICONS.cost],
+  ];
+  $("#statCards").innerHTML = cards.map(([l,v,s,ic]) =>
+    `<div class="card"><div class="label">${ic}${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join("");
+
+  $("#modelTable tbody").innerHTML = (d.by_model||[]).map(m =>
+    `<tr><td class="mono">${esc(m.model)}</td><td>${m.runs}</td><td>${fmtNum(m.tokens_in)}</td><td>${fmtNum(m.tokens_out)}</td><td>${m.cost.toFixed(4)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="empty">暂无数据</td></tr>`;
+
+  // 运行配置速览：通道 / 归档 / 审查主模型 / 白名单仓库数
+  try {
+    const [chs, mds, rps] = await Promise.all([
+      api("/api/channels"), api("/api/models"), api("/api/repos")]);
+    const cfgCards = [
+      ["消息通道", (chs.adapters||[]).length ? (chs.adapters||[]).join(" / ") : "未启用",
+       (chs.adapters||[]).includes("dingtalk") ? "钉钉 stream 长连接" : "通道与归档页配置", ICONS.channel],
+      ["报告归档", chs.report_sink === "dingdoc" ? "钉钉知识库" : "本地文件",
+       chs.report_sink === "dingdoc" ? ("workspace " + ((chs.dingdoc||{}).workspace_id||"")) : "报告落服务器目录", ICONS.sink],
+      ["审查主模型", ((mds.routing||{}).review||{}).primary || "-",
+       `备选 ${(((mds.routing||{}).review||{}).fallback||[]).join(" / ") || "无"}`, ICONS.chip],
+      ["白名单仓库", (rps.repos||[]).length + " 个", "仓库页管理", ICONS.repo],
+    ];
+    $("#cfgCards").innerHTML = cfgCards.map(([l,v,s2,ic]) =>
+      `<div class="card"><div class="label">${ic}${esc(l)}</div><div class="value" style="font-size:19px">${esc(v)}</div><div class="sub">${esc(s2)}</div></div>`).join("");
+  } catch (e) { /* 配置接口异常不阻塞概览 */ }
+
+  const audits = await api("/api/audit?limit=8");
+  $("#auditTable tbody").innerHTML = audits.map(a =>
+    `<tr><td class="mono">${esc(a.task_id)}</td><td class="mono">${esc(a.model||"-")}</td><td>${fmtNum((a.tokens_in||0)+(a.tokens_out||0))}</td><td>${((a.latency_ms||0)/1000).toFixed(1)}s</td></tr>`).join("")
+    || `<tr><td colspan="4" class="empty">暂无数据</td></tr>`;
+}
+
+// ── 任务 ──
+async function loadTasks() {
+  const items = await api("/api/tasks?limit=50");
+  const statusName = {done:"已完成", running:"运行中", failed:"失败", pending:"排队中"};
+  $("#taskTable tbody").innerHTML = items.map(t => {
+    const p = t.params || {};
+    const paramText = p.repo ? `${p.repo} · ${p.branch || ("MR " + (p.mr||""))}` : (p.prompt || "").slice(0, 30);
+    return `<tr class="clickable" onclick="openTask('${esc(t.id)}')">
+      <td class="mono">#${esc(t.id)}</td>
+      <td>${esc(t.capability)}</td>
+      <td class="mono" title='${esc(JSON.stringify(p))}'>${esc(paramText)}</td>
+      <td><span class="badge ${esc(t.status)}">${esc(statusName[t.status]||t.status)}</span></td>
+      <td>${esc(t.requester||"-")}</td>
+      <td>${fmtDur(t.created_at, t.finished_at)}</td>
+      <td>${fmtTime(t.created_at)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty">暂无任务</td></tr>`;
+}
+
+// ── 任务详情抽屉 ──
+async function openTask(id) {
+  const d = await api(`/api/tasks/${id}`);
+  const t = d.task;
+  const statusName = {done:"已完成", running:"运行中", failed:"失败", pending:"排队中"};
+  $("#drawerTitle").textContent = `任务 #${t.id}`;
+
+  let html = `<div class="kv-grid">
+    <div class="kv"><div class="k">能力</div><div class="v">${esc(t.capability)}</div></div>
+    <div class="kv"><div class="k">状态</div><div class="v"><span class="badge ${esc(t.status)}">${esc(statusName[t.status]||t.status)}</span></div></div>
+    <div class="kv"><div class="k">发起人</div><div class="v">${esc(t.requester||"-")}</div></div>
+    <div class="kv"><div class="k">耗时</div><div class="v">${fmtDur(t.created_at, t.finished_at)}</div></div>
+    <div class="kv wide"><div class="k">创建时间</div><div class="v">${fmtTime(t.created_at)}</div></div>
+    <div class="kv wide"><div class="k">参数</div><div class="v mono">${esc(JSON.stringify(t.params))}</div></div>
+  </div>`;
+
+  if (t.report_url) {
+    html += `<div class="section-label">审查报告</div><div class="result-box">${esc(t.report_url)}</div>`;
+  }
+  if (t.result_text) {
+    html += `<div class="section-label">结果摘要</div><div class="result-box">${esc(t.result_text)}</div>`;
+  }
+  if (t.error) {
+    html += `<div class="section-label">错误信息</div><div class="result-box err">${esc(t.error)}</div>`;
+  }
+
+  const trail = d.audit_trail || [];
+  const STAGE_NAMES = {clone:"克隆仓库", scan:"静态预扫", agent:"Agent 深审",
+                       archive:"归档报告", agent_run:"Agent 执行"};
+  if (trail.length) {
+    const items = trail.map(a => {
+      const p = a.payload || {};
+      const lat = ((a.latency_ms||0)/1000).toFixed(1) + "s";
+      let name = a.kind, meta = [], detail = "";
+      if (a.kind === "stage") {
+        name = STAGE_NAMES[p.stage] || p.stage || "编排环节";
+        if (p.repo) meta.push(p.repo + (p.branch ? " · " + p.branch : ""));
+        if (p.hits !== undefined) meta.push(`命中 ${p.hits} 个候选点`);
+      } else if (a.kind === "llm_request" || a.kind === "llm_run") {
+        name = `LLM 调用${p.round ? " 第 " + p.round + " 轮" : ""} · ${a.model || "-"}`;
+        meta.push(`输入 ${fmtNum(a.tokens_in)}`, `输出 ${fmtNum(a.tokens_out)}`,
+                  `¥ ${(a.cost||0).toFixed(4)}`);
+      } else if (a.kind === "tool_call") {
+        name = `工具 ${p.tool || "-"}${p.ok === false ? "（失败）" : ""}`;
+        detail = `参数：${p.args || "-"}\n返回：${p.result || "-"}`;
+      } else if (a.kind === "error") {
+        name = `异常 · ${STAGE_NAMES[p.stage] || p.stage || "未知环节"}`;
+        if (p.error) meta.push(p.error);
+        detail = p.traceback || "";
+      }
+      return `<div class="tl-item k-${esc(a.kind)}">
+        <div class="tl-head"><span class="tl-name">${esc(name)}</span><span class="tl-lat">${lat}</span></div>
+        ${meta.length ? `<div class="tl-meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}</div>` : ""}
+        ${detail ? `<details class="tl-detail"><summary>明细</summary><pre>${esc(detail)}</pre></details>` : ""}
+      </div>`;
+    }).join("");
+    html += `<div class="section-label">执行时间线 · ${trail.length} 步</div>
+    <div class="audit-card">
+      <div class="tl">${items}</div>
+      <div class="audit-totals">
+        <span>输入 <b>${fmtNum(d.totals.tokens_in)}</b></span>
+        <span>输出 <b>${fmtNum(d.totals.tokens_out)}</b></span>
+        <span>成本 <b>¥ ${(d.totals.cost||0).toFixed(4)}</b></span>
+        <span>任务总耗时 <b>${fmtDur(t.created_at, t.finished_at)}</b></span>
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="section-label">执行时间线</div><div class="empty">该任务没有执行记录</div>`;
+  }
+
+  $("#drawerBody").innerHTML = html;
+  $("#drawer").classList.add("show");
+  $("#drawerMask").classList.add("show");
+}
+window.openTask = openTask;
+function closeTask() {
+  $("#drawer").classList.remove("show");
+  $("#drawerMask").classList.remove("show");
+}
+window.closeTask = closeTask;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeTask(); });
+
+// ── 仓库配置 ──
+let reposCache = [];
+async function loadRepos() {
+  const d = await api("/api/repos");
+  reposCache = d.repos;
+  renderRepos();
+}
+function renderRepos() {
+  $("#repoList").innerHTML = reposCache.map((r,i) =>
+    `<div class="repo-item" style="animation-delay:${i*0.05}s">
+      <span class="name">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25v3.25a.25.25 0 0 0 .4.2l1.45-1.087a.249.249 0 0 1 .3 0L8.6 15.7a.25.25 0 0 0 .4-.2v-3.25a.25.25 0 0 0-.25-.25h-3.5a.25.25 0 0 0-.25.25Z"/></svg>
+        ${esc(r)}
+      </span>
+      <button class="del" onclick="delRepo(${i})" title="移除">✕</button>
+    </div>`).join("")
+    || `<div class="empty">白名单为空，请先添加仓库</div>`;
+}
+async function saveRepos(repos) {
+  const d = await api("/api/repos", {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({repos})
+  });
+  reposCache = d.repos;
+  renderRepos();
+}
+$("#addRepoBtn").onclick = async () => {
+  const v = $("#repoInput").value.trim();
+  if (!v) return;
+  if (reposCache.includes(v)) { toast("仓库已在白名单中", true); return; }
+  try {
+    await saveRepos([...reposCache, v]);
+    $("#repoInput").value = "";
+    toast("已添加 " + v + RESTART_TIP);
+  } catch (e) { toast("保存失败：" + e.message, true); }
+};
+$("#repoInput").onkeydown = e => { if (e.key === "Enter") $("#addRepoBtn").click(); };
+window.delRepo = async i => {
+  const name = reposCache[i];
+  try { await saveRepos(reposCache.filter(r => r !== name)); toast("已移除 " + name + RESTART_TIP); }
+  catch (e) { toast("保存失败：" + e.message, true); }
+};
+
+// ── 配置查看 ──
+function renderCfg(el, obj, indent=0) {
+  const pad = "  ".repeat(indent);
+  let html = "";
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== null && typeof v === "object") {
+      html += `${pad}<span class="cfg-key">${esc(k)}</span>:\n` + renderCfg(el, v, indent+1);
+    } else {
+      html += `${pad}<span class="cfg-key">${esc(k)}</span>: ${esc(JSON.stringify(v))}\n`;
+    }
+  }
+  return html;
+}
+async function loadCodehost() {
+  const d = await api("/api/config");
+  $("#codehostCfg").innerHTML = renderCfg(null, d.app.codehost || {});
+}
+
+// ── 通用弹窗 ──
+let modalOkHandler = null;
+function openModal(title, bodyHtml, onOk) {
+  $("#modalTitle").textContent = title;
+  $("#modalBody").innerHTML = bodyHtml;
+  modalOkHandler = onOk;
+  $("#modal").classList.add("show");
+  $("#modalMask").classList.add("show");
+}
+function closeModal() {
+  $("#modal").classList.remove("show");
+  $("#modalMask").classList.remove("show");
+  modalOkHandler = null;
+}
+window.closeModal = closeModal;
+$("#modalOk").onclick = () => { if (modalOkHandler) modalOkHandler(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+const fv = id => $("#" + id).value.trim();
+const fnum = id => { const v = fv(id); return v === "" ? null : Number(v); };
+const flist = id => fv(id).split(",").map(s => s.trim()).filter(Boolean);
+
+// ── 模型注册表 ──
+let modelsCache = {}, routingCache = {};
+async function loadModels() {
+  const d = await api("/api/models");
+  modelsCache = d.models || {};
+  routingCache = d.routing || {};
+  renderModels();
+  renderRouting();
+}
+function renderModels() {
+  const names = Object.keys(modelsCache);
+  $("#modelRegTable tbody").innerHTML = names.map(name => {
+    const m = modelsCache[name];
+    return `<tr>
+      <td class="mono">${esc(name)}</td>
+      <td class="mono">${esc(m.model || "-")}</td>
+      <td class="mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(m.base_url||"")}">${esc(m.base_url || "-")}</td>
+      <td>${m.context_window ? fmtNum(m.context_window) : "-"}</td>
+      <td>${m.input_price ?? "-"} / ${m.output_price ?? "-"}</td>
+      <td style="white-space:nowrap">
+        <button class="row-btn" onclick="openModelModal('${name}')">编辑</button>
+        <button class="row-btn danger" onclick="delModel('${name}')">删除</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">暂无模型</td></tr>`;
+}
+function openModelModal(name) {
+  const m = name ? modelsCache[name] : {};
+  openModal(name ? `编辑模型 ${name}` : "添加模型", `
+    <div class="form-grid">
+      <div class="form-row"><label>名称（注册表内唯一）</label>
+        <input id="mf_name" value="${esc(name || "")}" ${name ? "disabled" : ""} placeholder="如 qwen-plus"></div>
+      <div class="form-row"><label>真实模型名（模型池侧）</label>
+        <input id="mf_model" value="${esc(m.model || "")}" placeholder="如 qwen-plus"></div>
+    </div>
+    <div class="form-row"><label>base_url（OpenAI 兼容）</label>
+      <input id="mf_base" value="${esc(m.base_url || "")}" placeholder="http://llm-pool.example.com/v1"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>api_key_env（环境变量名）</label>
+        <input id="mf_keyenv" value="${esc(m.api_key_env || "LLM_POOL_KEY")}"></div>
+      <div class="form-row"><label>上下文窗口</label>
+        <input id="mf_ctx" type="number" value="${m.context_window || ""}" placeholder="131072"></div>
+      <div class="form-row"><label>输入单价（元/百万 tokens）</label>
+        <input id="mf_pin" type="number" step="0.01" value="${m.input_price ?? ""}"></div>
+      <div class="form-row"><label>输出单价（元/百万 tokens）</label>
+        <input id="mf_pout" type="number" step="0.01" value="${m.output_price ?? ""}"></div>
+    </div>
+    <div class="form-row"><label>能力标记（逗号分隔）</label>
+      <input id="mf_caps" value="${esc((m.capabilities || []).join(", "))}" placeholder="tool_call">
+      <div class="tip">需要工具调用的用途（review/intent）请填 tool_call</div></div>
+  `, async () => {
+    const n = fv("mf_name");
+    if (!n) { toast("请填写模型名称", true); return; }
+    if (!fv("mf_model") || !fv("mf_base")) { toast("真实模型名和 base_url 必填", true); return; }
+    const models = { ...modelsCache, [n]: {
+      base_url: fv("mf_base"), api_key_env: fv("mf_keyenv") || "LLM_POOL_KEY",
+      model: fv("mf_model"), capabilities: flist("mf_caps"),
+      context_window: fnum("mf_ctx"), input_price: fnum("mf_pin"), output_price: fnum("mf_pout"),
+    }};
+    try {
+      await api("/api/models", { method: "PUT", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ models, routing: routingCache }) });
+      closeModal(); toast("模型已保存" + RESTART_TIP); loadModels();
+    } catch (e) { toast("保存失败：" + e.message, true); }
+  });
+}
+window.openModelModal = openModelModal;
+window.delModel = async name => {
+  const refs = Object.entries(routingCache).filter(([, r]) =>
+    r.primary === name || (r.fallback || []).includes(name)).map(([p]) => p);
+  if (refs.length) { toast(`模型正被路由 ${refs.join("/")} 使用，请先改路由`, true); return; }
+  if (!confirm(`删除模型 ${name}？`)) return;
+  const models = { ...modelsCache };
+  delete models[name];
+  try {
+    await api("/api/models", { method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ models, routing: routingCache }) });
+    toast("已删除 " + name + RESTART_TIP); loadModels();
+  } catch (e) { toast("删除失败：" + e.message, true); }
+};
+
+// ── 用途路由 ──
+function renderRouting() {
+  const purposes = Object.keys(routingCache);
+  const opts = sel => Object.keys(modelsCache).map(n =>
+    `<option value="${esc(n)}" ${n === sel ? "selected" : ""}>${esc(n)}</option>`).join("");
+  $("#routingTable tbody").innerHTML = purposes.map(p => {
+    const r = routingCache[p];
+    return `<tr>
+      <td class="mono">${esc(p)}</td>
+      <td><select id="rt_primary_${esc(p)}">${opts(r.primary)}</select></td>
+      <td><input class="tbl-input" style="width:100%" id="rt_fallback_${esc(p)}" value="${esc((r.fallback || []).join(", "))}" placeholder="备选模型，逗号分隔"></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="3" class="empty">暂无路由</td></tr>`;
+}
+window.saveRouting = async () => {
+  const routing = {};
+  for (const p of Object.keys(routingCache)) {
+    routing[p] = { primary: fv("rt_primary_" + p), fallback: flist("rt_fallback_" + p) };
+  }
+  try {
+    await api("/api/models", { method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ models: modelsCache, routing }) });
+    toast("路由已保存" + RESTART_TIP); loadModels();
+  } catch (e) { toast("保存失败：" + e.message, true); }
+};
+
+// ── 能力注册 ──
+let capsCache = [];
+async function loadCaps() {
+  const d = await api("/api/capabilities");
+  capsCache = d.capabilities || [];
+  renderCaps();
+}
+function renderCaps() {
+  $("#capTable tbody").innerHTML = capsCache.map(c => `<tr>
+    <td class="mono">${esc(c.name)}</td>
+    <td style="max-width:260px">${esc(c.description || "-")}</td>
+    <td class="mono">${esc(c.flow || "-")}</td>
+    <td class="mono">${esc(c.command ? "@" + c.command : "-")}</td>
+    <td class="mono">${esc(c.model_purpose || "-")}</td>
+    <td class="mono">${esc(c.output || "-")}</td>
+    <td style="white-space:nowrap">
+      <button class="row-btn" onclick="openCapModal('${c.name}')">编辑</button>
+      <button class="row-btn danger" onclick="delCap('${c.name}')">注销</button>
+    </td>
+  </tr>`).join("") || `<tr><td colspan="7" class="empty">暂无能力</td></tr>`;
+}
+function openCapModal(name) {
+  const c = name ? capsCache.find(x => x.name === name) : {};
+  const purposeOpts = Object.keys(routingCache).map(p =>
+    `<option value="${esc(p)}" ${p === (c.model_purpose || "chat") ? "selected" : ""}>${esc(p)}</option>`).join("");
+  const flowOpts = ["review_pipeline", "agent_only"].map(f =>
+    `<option value="${f}" ${f === (c.flow || "agent_only") ? "selected" : ""}>${f}</option>`).join("");
+  const outOpts = ["text", "review_report"].map(o =>
+    `<option value="${o}" ${o === (c.output || "text") ? "selected" : ""}>${o}</option>`).join("");
+  openModal(name ? `编辑能力 ${name}` : "新建能力", `
+    <div class="form-grid">
+      <div class="form-row"><label>名称（唯一，小写字母/数字/中划线）</label>
+        <input id="cf_name" value="${esc(name || "")}" ${name ? "disabled" : ""} placeholder="如 sql-review"></div>
+      <div class="form-row"><label>触发命令（群内 @bot 命令）</label>
+        <input id="cf_command" value="${esc(c.command || "")}" placeholder="如 review"></div>
+    </div>
+    <div class="form-row"><label>描述</label>
+      <input id="cf_desc" value="${esc(c.description || "")}" placeholder="这个能力做什么"></div>
+    <div class="form-grid">
+      <div class="form-row"><label>流程类型</label><select id="cf_flow">${flowOpts}</select>
+        <div class="tip">review_pipeline = 编排骨架+深审；agent_only = 纯对话</div></div>
+      <div class="form-row"><label>输出类型</label><select id="cf_output">${outOpts}</select></div>
+      <div class="form-row"><label>模型用途</label><select id="cf_purpose">${purposeOpts}</select></div>
+      <div class="form-row"><label>Skills（逗号分隔）</label>
+        <input id="cf_skills" value="${esc((c.skill_names || []).join(", "))}" placeholder="slow-query, code-style"></div>
+    </div>
+    <div class="form-row"><label>工具集（逗号分隔）</label>
+      <input id="cf_toolsets" value="${esc((c.toolsets || []).join(", "))}" placeholder="local.git, local.scanner"></div>
+  `, async () => {
+    const payload = {
+      description: fv("cf_desc"), flow: fv("cf_flow"), output: fv("cf_output"),
+      model_purpose: fv("cf_purpose"), command: fv("cf_command") || null,
+      skill_names: flist("cf_skills"), toolsets: flist("cf_toolsets"),
+    };
+    try {
+      if (name) {
+        await api(`/api/capabilities/${name}`, { method: "PUT", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload) });
+      } else {
+        const n = fv("cf_name");
+        if (!n) { toast("请填写能力名称", true); return; }
+        await api("/api/capabilities", { method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ name: n, ...payload }) });
+      }
+      closeModal(); toast("能力已保存" + RESTART_TIP); loadCaps();
+    } catch (e) { toast("保存失败：" + e.message, true); }
+  });
+}
+window.openCapModal = openCapModal;
+window.delCap = async name => {
+  if (!confirm(`注销能力 ${name}？\n只从注册表移除，目录文件保留，可手动加回。`)) return;
+  try {
+    await api(`/api/capabilities/${name}`, { method: "DELETE" });
+    toast("已注销 " + name + RESTART_TIP); loadCaps();
+  } catch (e) { toast("注销失败：" + e.message, true); }
+};
+
+// ── 通道与归档 ──
+async function loadChannels() {
+  const d = await api("/api/channels");
+  $("#ch_dingtalk").checked = (d.adapters || []).includes("dingtalk");
+  $("#ch_sink").value = d.report_sink || "local";
+  $("#ch_cid").value = (d.dingtalk || {}).client_id_env || "";
+  $("#ch_secret").value = (d.dingtalk || {}).client_secret_env || "";
+  $("#ch_ws").value = (d.dingdoc || {}).workspace_id || "";
+  $("#ch_op").value = (d.dingdoc || {}).operator_id || "";
+}
+window.saveChannels = async () => {
+  const body = {
+    adapters: $("#ch_dingtalk").checked ? ["dingtalk"] : [],
+    dingtalk: { client_id_env: fv("ch_cid") || "DINGTALK_CLIENT_ID",
+                client_secret_env: fv("ch_secret") || "DINGTALK_CLIENT_SECRET" },
+    report_sink: fv("ch_sink"),
+    dingdoc: { workspace_id: fv("ch_ws"), operator_id: fv("ch_op") },
+  };
+  try {
+    await api("/api/channels", { method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body) });
+    toast("通道与归档配置已保存" + RESTART_TIP);
+  } catch (e) { toast("保存失败：" + e.message, true); }
+};
+
+// ── 健康检查 & 初始化 ──
+fetch("/healthz").then(r => r.json()).then(() => {
+  $("#healthText").textContent = "服务正常";
+}).catch(() => {
+  $("#healthText").textContent = "连接失败";
+});
+loadOverview();
+setInterval(() => {
+  const active = document.querySelector("nav button.active").dataset.tab;
+  if (active === "overview" || active === "tasks") loadTab(active);
+}, 10000);
+</script>
+</body>
+</html>
